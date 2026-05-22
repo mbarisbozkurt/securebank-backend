@@ -1,0 +1,123 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: securebank-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-securebank}
+      POSTGRES_USER: ${POSTGRES_USER:-securebank}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: securebank-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-securebank}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?RABBITMQ_DEFAULT_PASS must be set in .env}
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+    container_name: securebank-backend
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-securebank}
+      DB_USERNAME: ${POSTGRES_USER:-securebank}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-securebank}
+      RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS:?RABBITMQ_DEFAULT_PASS must be set in .env}
+      RABBITMQ_EVENTS_EXCHANGE: ${RABBITMQ_EVENTS_EXCHANGE:-securebank.events}
+      RABBITMQ_TRANSFER_COMPLETED_ROUTING_KEY: ${RABBITMQ_TRANSFER_COMPLETED_ROUTING_KEY:-transfer.completed}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-3600000}
+      REFRESH_TOKEN_EXPIRATION: ${REFRESH_TOKEN_EXPIRATION:-604800000}
+      REFRESH_TOKEN_COOKIE_SECURE: ${REFRESH_TOKEN_COOKIE_SECURE:-false}
+      REFRESH_TOKEN_COOKIE_SAME_SITE: ${REFRESH_TOKEN_COOKIE_SAME_SITE:-Strict}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-validate}
+      JPA_SHOW_SQL: ${JPA_SHOW_SQL:-false}
+      JPA_FORMAT_SQL: ${JPA_FORMAT_SQL:-false}
+      FLYWAY_ENABLED: ${FLYWAY_ENABLED:-true}
+      FLYWAY_BASELINE_ON_MIGRATE: ${FLYWAY_BASELINE_ON_MIGRATE:-false}
+      ADMIN_SEED_ENABLED: ${ADMIN_SEED_ENABLED:-false}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      RATE_LIMIT_GENERAL_LIMIT: ${RATE_LIMIT_GENERAL_LIMIT:-600}
+      RATE_LIMIT_SENSITIVE_LIMIT: ${RATE_LIMIT_SENSITIVE_LIMIT:-60}
+    ports:
+      - "${BACKEND_PORT:-8081}:8080"
+    restart: unless-stopped
+
+  notification-service:
+    build:
+      context: ../securebank-notification-service
+    container_name: securebank-notification-service
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-securebank}
+      DB_USERNAME: ${POSTGRES_USER:-securebank}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      JPA_DDL_AUTO: ${NOTIFICATION_JPA_DDL_AUTO:-validate}
+      FLYWAY_ENABLED: ${NOTIFICATION_FLYWAY_ENABLED:-true}
+      FLYWAY_BASELINE_ON_MIGRATE: ${NOTIFICATION_FLYWAY_BASELINE_ON_MIGRATE:-true}
+      FLYWAY_BASELINE_VERSION: ${NOTIFICATION_FLYWAY_BASELINE_VERSION:-0}
+      FLYWAY_TABLE: ${NOTIFICATION_FLYWAY_TABLE:-flyway_schema_history_notification}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-securebank}
+      RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS:?RABBITMQ_DEFAULT_PASS must be set in .env}
+      RABBITMQ_EVENTS_EXCHANGE: ${RABBITMQ_EVENTS_EXCHANGE:-securebank.events}
+      RABBITMQ_EVENTS_DEAD_LETTER_EXCHANGE: ${RABBITMQ_EVENTS_DEAD_LETTER_EXCHANGE:-securebank.events.dlx}
+      RABBITMQ_TRANSFER_COMPLETED_QUEUE: ${RABBITMQ_TRANSFER_COMPLETED_QUEUE:-securebank.transfer.completed}
+      RABBITMQ_TRANSFER_COMPLETED_DEAD_LETTER_QUEUE: ${RABBITMQ_TRANSFER_COMPLETED_DEAD_LETTER_QUEUE:-securebank.transfer.completed.dlq}
+      RABBITMQ_TRANSFER_COMPLETED_ROUTING_KEY: ${RABBITMQ_TRANSFER_COMPLETED_ROUTING_KEY:-transfer.completed}
+      RABBITMQ_TRANSFER_COMPLETED_DEAD_LETTER_ROUTING_KEY: ${RABBITMQ_TRANSFER_COMPLETED_DEAD_LETTER_ROUTING_KEY:-transfer.completed.dlq}
+      RABBITMQ_DECLARE_ON_STARTUP: ${RABBITMQ_DECLARE_ON_STARTUP:-true}
+      RABBITMQ_LISTENER_AUTO_STARTUP: ${RABBITMQ_LISTENER_AUTO_STARTUP:-true}
+      RABBITMQ_RETRY_MAX_ATTEMPTS: ${RABBITMQ_RETRY_MAX_ATTEMPTS:-3}
+      RABBITMQ_RETRY_INITIAL_INTERVAL_MS: ${RABBITMQ_RETRY_INITIAL_INTERVAL_MS:-2000}
+      RABBITMQ_RETRY_MULTIPLIER: ${RABBITMQ_RETRY_MULTIPLIER:-2.0}
+      RABBITMQ_RETRY_MAX_INTERVAL_MS: ${RABBITMQ_RETRY_MAX_INTERVAL_MS:-10000}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@securebank.local}
+      MAIL_SENDER_MODE: ${MAIL_SENDER_MODE:-logging}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-true}
+      MAIL_SMTP_STARTTLS_ENABLE: ${MAIL_SMTP_STARTTLS_ENABLE:-true}
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
