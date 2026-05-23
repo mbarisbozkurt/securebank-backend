@@ -14,7 +14,14 @@ The project is feature-complete for the current project scope.
 - Docker Compose runs backend, PostgreSQL, RabbitMQ, and notification service together.
 - Real SMTP transfer emails work when configured.
 
-Live URLs will be added here after AWS deployment.
+## Live Deployment
+
+```text
+Frontend: https://d1zrdkm958a5xk.cloudfront.net
+Backend API: https://api-63-180-21-244.nip.io
+```
+
+The production stack runs on AWS with the frontend served through S3 and CloudFront, and the backend stack running on EC2 with Docker Compose.
 
 ## Architecture
 
@@ -142,11 +149,9 @@ Postman collection:
 postman/SecureBank.postman_collection.json
 ```
 
-## AWS Deployment Plan
+## AWS Deployment
 
-Deployment will be done at the end as a single AWS deployment.
-
-Planned setup:
+Current setup:
 
 - Frontend: S3 + CloudFront
 - Backend stack: EC2 `t3.small`
@@ -154,7 +159,7 @@ Planned setup:
 - Services on EC2: backend, notification service, PostgreSQL, RabbitMQ
 - Reverse proxy: Nginx
 - HTTPS: Let's Encrypt
-- Optional DNS: Route 53
+- Backend DNS: `nip.io`
 - Cost target: roughly 25-30 USD/month for the first version
 
 Public access should be limited to HTTP/HTTPS. PostgreSQL, RabbitMQ, and RabbitMQ Management UI should stay private.
