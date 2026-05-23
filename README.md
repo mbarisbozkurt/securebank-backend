@@ -2,7 +2,7 @@
 
 SecureBank is a full-stack banking project built with Spring Boot, React, PostgreSQL, RabbitMQ, Docker, and a separate notification microservice.
 
-The project is not a real banking system. It is designed to demonstrate realistic backend engineering decisions for a fintech-style application: secure authentication, account ownership checks, money transfers, audit logging, event-driven messaging, email notifications, retry/DLQ handling, and deployment planning.
+The project is not a real banking system. It is designed to demonstrate realistic backend engineering decisions for a fintech-style application: secure authentication, account ownership checks, money transfers, audit logging, event-driven messaging, email notifications, and retry/DLQ handling.
 
 ## Status
 
@@ -18,10 +18,12 @@ The project is feature-complete for the current project scope.
 
 ```text
 Frontend: https://d1zrdkm958a5xk.cloudfront.net
-Backend API: https://api-63-180-21-244.nip.io
+Backend API base URL: https://api-63-180-21-244.nip.io
 ```
 
 The production stack runs on AWS with the frontend served through S3 and CloudFront, and the backend stack running on EC2 with Docker Compose.
+
+The API base URL is not a standalone web page. Protected endpoints return `401 Unauthorized` unless a valid JWT is provided.
 
 ## Architecture
 
@@ -154,15 +156,12 @@ postman/SecureBank.postman_collection.json
 Current setup:
 
 - Frontend: S3 + CloudFront
-- Backend stack: EC2 `t3.small`
+- Backend stack: EC2
 - Runtime: Docker Compose
 - Services on EC2: backend, notification service, PostgreSQL, RabbitMQ
 - Reverse proxy: Nginx
 - HTTPS: Let's Encrypt
 - Backend DNS: `nip.io`
-- Cost target: roughly 25-30 USD/month for the first version
-
-Public access should be limited to HTTP/HTTPS. PostgreSQL, RabbitMQ, and RabbitMQ Management UI should stay private.
 
 ## Related Projects
 
